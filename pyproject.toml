@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "codex-research-mcp"
+version = "0.1.0"
+description = "Local research pipeline and MCP server for Codex maintainer workflows"
+requires-python = ">=3.12"
+readme = "README.md"
+license = "Apache-2.0"
+authors = [{ name = "Nikolai Ershov" }]
+keywords = ["codex", "mcp", "research", "search", "open-source", "maintenance"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+]
+
+[project.scripts]
+codex-research = "search_local.cli:main"
+codex-research-mcp = "search_local.mcp_server:main"
+search-local = "search_local.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/search_local"]
