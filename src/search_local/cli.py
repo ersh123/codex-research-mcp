@@ -46,12 +46,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--google-backend", choices=["xmlstock", "cse"], default="xmlstock")
     _add_common(p)
 
-    p = sub.add_parser("deep", help="multi-lane research with deterministic subagents and quality audit")
+    p = sub.add_parser("deep", help="multi-lane research with provider-pluggable subagents and quality audit")
     p.add_argument("query")
     p.add_argument("--max-sources", type=int, default=140)
     p.add_argument("--no-google", action="store_true")
     p.add_argument("--no-exa", action="store_true")
     p.add_argument("--google-backend", choices=["xmlstock", "cse"], default="xmlstock")
+    p.add_argument("--subagent-provider", default="deterministic", help="lane planner provider: deterministic, deepseek, or another OpenAI-compatible provider prefix")
+    p.add_argument("--subagent-count", type=int, default=6)
+    p.add_argument("--subagent-model", help="optional model override for the planner provider")
+    p.add_argument("--parallelism", type=int, default=8, help="parallel search tasks for subagent lanes")
     _add_common(p)
 
     p = sub.add_parser("docs", help="official/docs-first Exa search")
@@ -93,7 +97,17 @@ def dispatch(args: argparse.Namespace) -> dict[str, Any]:
     if args.command == "pipeline":
         return run_research_pipeline(args.query, max_sources=args.max_sources, include_google=not args.no_google, include_exa=not args.no_exa, google_backend=args.google_backend)
     if args.command == "deep":
-        return run_research_subagents(args.query, max_sources=args.max_sources, include_google=not args.no_google, include_exa=not args.no_exa, google_backend=args.google_backend)
+        return run_research_subagents(
+            args.query,
+            max_sources=args.max_sources,
+            include_google=not args.no_google,
+            include_exa=not args.no_exa,
+            google_backend=args.google_backend,
+            subagent_provider=args.subagent_provider,
+            subagent_count=args.subagent_count,
+            subagent_model=args.subagent_model,
+            parallelism=args.parallelism,
+        )
     if args.command == "docs":
         return run_docs(args.query, num=args.num)
     if args.command == "google":

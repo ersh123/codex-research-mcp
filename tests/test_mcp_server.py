@@ -54,7 +54,18 @@ def test_mcp_research_pipeline_call_returns_text_json(monkeypatch):
 
 
 def test_mcp_deep_research_call_returns_text_json(monkeypatch):
-    def fake_deep(query, *, max_sources=140, include_google=True, include_exa=True, google_backend="xmlstock"):
+    def fake_deep(
+        query,
+        *,
+        max_sources=140,
+        include_google=True,
+        include_exa=True,
+        google_backend="xmlstock",
+        subagent_provider="deterministic",
+        subagent_count=6,
+        subagent_model=None,
+        parallelism=8,
+    ):
         return {
             "ok": True,
             "profile": "research-subagents",
@@ -66,6 +77,10 @@ def test_mcp_deep_research_call_returns_text_json(monkeypatch):
                 "include_google": include_google,
                 "include_exa": include_exa,
                 "google_backend": google_backend,
+                "subagent_provider": subagent_provider,
+                "subagent_count": subagent_count,
+                "subagent_model": subagent_model,
+                "parallelism": parallelism,
             },
             "artifacts": {},
             "warnings": [],
@@ -80,7 +95,15 @@ def test_mcp_deep_research_call_returns_text_json(monkeypatch):
         "method": "tools/call",
         "params": {
             "name": "deep_research",
-            "arguments": {"query": "Codex OSS", "max_sources": 24, "include_exa": False},
+            "arguments": {
+                "query": "Codex OSS",
+                "max_sources": 24,
+                "include_exa": False,
+                "subagent_provider": "deepseek",
+                "subagent_count": 10,
+                "subagent_model": "deepseek-chat",
+                "parallelism": 10,
+            },
         },
     })
 
@@ -90,4 +113,7 @@ def test_mcp_deep_research_call_returns_text_json(monkeypatch):
     assert payload["profile"] == "research-subagents"
     assert payload["summary"]["max_sources"] == 24
     assert payload["summary"]["include_exa"] is False
+    assert payload["summary"]["subagent_provider"] == "deepseek"
+    assert payload["summary"]["subagent_count"] == 10
+    assert payload["summary"]["parallelism"] == 10
     assert payload["artifacts"] == {"report_md": "/tmp/deep.md"}

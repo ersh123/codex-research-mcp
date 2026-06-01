@@ -13,6 +13,7 @@ It is built for work where "search the web" is not enough: triaging OSS issues, 
 - Scores freshness and source quality.
 - Extracts claim candidates and checks citation coverage.
 - Runs deterministic research lanes for deep work: scope, primary evidence, freshness, skepticism, practitioner evidence, and synthesis.
+- Can ask a configured LLM provider to create dynamic subagent lanes, while keeping collection and audit reproducible.
 - Flags thin snippets, hype language, deprecated/security wording, and missing URLs.
 - Writes reproducible `report.md`, `sources.jsonl`, and `summary.json` artifacts.
 - Exposes the workflow as a stdio MCP server for Codex and other MCP clients.
@@ -42,9 +43,32 @@ Environment variables are also supported:
 - `XMLSTOCK_YANDEX_XML_KEY`
 - `GOOGLE_CSE_API_KEY`
 - `GOOGLE_CSE_CX`
+- `DEEPSEEK_API_KEY`
+- `DEEPSEEK_BASE_URL`
+- `DEEPSEEK_MODEL`
+- `SEARCH_LOCAL_LLM_API_KEY`
+- `SEARCH_LOCAL_LLM_BASE_URL`
+- `SEARCH_LOCAL_LLM_MODEL`
 - `SEARCH_LOCAL_CACHE_ROOT`
 
 Google support defaults to XMLstock Google XML so it can reuse the same XMLstock account/key class as other XMLstock search paths. The default config file is `~/.config/xmlstock/.env`. Google CSE JSON remains available with `--backend cse`.
+
+Dynamic subagent planning is optional. Put LLM credentials in a private file:
+
+```bash
+mkdir -p ~/.config/codex-research-mcp
+cp .env.example ~/.config/codex-research-mcp/llm.env
+chmod 600 ~/.config/codex-research-mcp/llm.env
+```
+
+DeepSeek uses an OpenAI-compatible chat completions API by default:
+
+```bash
+codex-research deep "dependency migration research" \
+  --subagent-provider deepseek \
+  --subagent-count 10 \
+  --parallelism 10
+```
 
 ## CLI
 
@@ -106,7 +130,7 @@ Example MCP client config:
 
 It is intentionally conservative: it does not claim truth from one result page. It gives Codex a structured evidence set and tells it where the weak spots are.
 
-`deep_research` adds deterministic subagents on top of the same provider stack. They are not external LLM calls; they are reproducible research lanes:
+`deep_research` adds subagent lanes on top of the same provider stack. By default they are deterministic and reproducible:
 
 - `scope_mapper`
 - `primary_source_hunter`
@@ -115,7 +139,7 @@ It is intentionally conservative: it does not claim truth from one result page. 
 - `practitioner`
 - `synthesis_editor`
 
-This keeps the useful part of multi-agent research — decomposed search intent and independent evidence lanes — without making the output depend on hidden agent chatter.
+With `--subagent-provider deepseek` or MCP `subagent_provider: "deepseek"`, the LLM provider creates the lane plan only. Search collection, dedupe, source scoring, freshness checks, and quality audit still run in this project and write artifacts.
 
 ## Artifacts And Cache
 

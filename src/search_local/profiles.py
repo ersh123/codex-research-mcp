@@ -10,10 +10,12 @@ from .adapters.google_cse import google_cse_search
 from .adapters.google_xmlstock import google_xmlstock_search
 from .cache import cached_call
 from .config import (
+    DEEPSEEK_CONFIG,
     EXA_CONFIG,
     EXA_FETCH,
     EXA_SEARCH,
     GOOGLE_CSE_CONFIG,
+    LLM_CONFIG,
     XMLSTOCK_CONFIG,
     XMLSTOCK_LEGACY_CONFIG,
     env_or_config,
@@ -22,7 +24,7 @@ from .config import (
 from .models import Source
 from .quality import build_quality_audit
 from .research import annotate_sources, build_subqueries, summarize_validation
-from .subagents import build_subagent_plan
+from .subagents import build_provider_subagent_plan
 from .util import run_cmd
 
 
@@ -158,14 +160,25 @@ def research_pipeline(query: str, *, max_sources: int = 80, include_google: bool
     return cached_call("research-pipeline", query, params, _live)
 
 
-def research_subagents(query: str, *, max_sources: int = 140, include_google: bool = True, include_exa: bool = True, google_backend: str = "xmlstock") -> dict[str, Any]:
+def research_subagents(
+    query: str,
+    *,
+    max_sources: int = 140,
+    include_google: bool = True,
+    include_exa: bool = True,
+    google_backend: str = "xmlstock",
+    subagent_provider: str = "deterministic",
+    subagent_count: int = 6,
+    subagent_model: str | None = None,
+    parallelism: int = 8,
+) -> dict[str, Any]:
     def _live() -> dict[str, Any]:
-        plan = build_subagent_plan(query)
+        plan, planner, plan_warnings = build_provider_subagent_plan(query, provider=subagent_provider, count=subagent_count, model=subagent_model)
         provider_count = int(include_exa) + int(include_google)
         query_count = sum(len(lane["queries"]) for lane in plan)
         per_query_num = max(2, min(25, math.ceil(max_sources / max(query_count * max(provider_count, 1), 1))))
         all_sources: list[Source] = []
-        warnings: list[str] = []
+        warnings: list[str] = [*plan_warnings]
         providers: list[str] = []
         if include_exa:
             providers.append("exa")
@@ -198,8 +211,9 @@ def research_subagents(query: str, *, max_sources: int = 140, include_google: bo
             return index, warning, sources
 
         task_results: list[tuple[int, str | None, list[Source]]] = []
+        worker_count = max(1, min(max(1, parallelism), len(tasks))) if tasks else 0
         if tasks:
-            with ThreadPoolExecutor(max_workers=min(8, len(tasks))) as pool:
+            with ThreadPoolExecutor(max_workers=worker_count) as pool:
                 futures = [pool.submit(run_task, index, task) for index, task in enumerate(tasks)]
                 for future in as_completed(futures):
                     task_results.append(future.result())
@@ -215,15 +229,28 @@ def research_subagents(query: str, *, max_sources: int = 140, include_google: bo
         summary = {
             "engine": "research-subagents",
             "subagents": plan,
+            "subagent_provider": subagent_provider,
+            "subagent_count": len(plan),
+            "subagent_planner": planner,
             "providers": providers,
             "per_query_num": per_query_num,
+            "parallelism": worker_count,
             "partial_failures": len(warnings),
             **validation,
             "quality_audit": audit,
         }
         return _result("research-subagents", query, all_sources, summary, warnings, allow_partial=True)
 
-    params = {"max_sources": max_sources, "include_google": include_google, "include_exa": include_exa, "google_backend": google_backend}
+    params = {
+        "max_sources": max_sources,
+        "include_google": include_google,
+        "include_exa": include_exa,
+        "google_backend": google_backend,
+        "subagent_provider": subagent_provider,
+        "subagent_count": subagent_count,
+        "subagent_model": subagent_model,
+        "parallelism": parallelism,
+    }
     return cached_call("research-subagents", query, params, _live)
 
 
@@ -263,6 +290,11 @@ def doctor(*, live: bool = False) -> dict[str, Any]:
         "google-cse-config",
         bool(env_or_config("GOOGLE_CSE_API_KEY", GOOGLE_CSE_CONFIG) and env_or_config("GOOGLE_CSE_CX", GOOGLE_CSE_CONFIG)),
         f"optional fallback: {GOOGLE_CSE_CONFIG} or env GOOGLE_CSE_API_KEY/GOOGLE_CSE_CX",
+    )
+    add_optional(
+        "deepseek-config",
+        bool(env_or_config("DEEPSEEK_API_KEY", LLM_CONFIG, DEEPSEEK_CONFIG)),
+        f"optional subagent planner: {LLM_CONFIG} or {DEEPSEEK_CONFIG} or env DEEPSEEK_API_KEY",
     )
 
     for name, path in [("exa-search-help", EXA_SEARCH), ("exa-fetch-help", EXA_FETCH)]:

@@ -26,6 +26,8 @@ EXA_CONFIG = _path_from_env("EXA_CONFIG", "~/.config/exa/.env")
 GOOGLE_CSE_CONFIG = _path_from_env("GOOGLE_CSE_CONFIG", "~/.config/google-cse/.env")
 XMLSTOCK_CONFIG = _path_from_env("XMLSTOCK_CONFIG", "~/.config/xmlstock/.env")
 XMLSTOCK_LEGACY_CONFIG = _path_from_env("XMLSTOCK_LEGACY_CONFIG", "~/.config/yandex-xmlstock/.env")
+LLM_CONFIG = _path_from_env("SEARCH_LOCAL_LLM_CONFIG", "~/.config/codex-research-mcp/llm.env")
+DEEPSEEK_CONFIG = _path_from_env("DEEPSEEK_CONFIG", "~/.config/deepseek/.env")
 
 CACHE_ROOT = _path_from_env(
     "SEARCH_LOCAL_CACHE_ROOT",
@@ -50,7 +52,7 @@ def config_values(path: Path) -> dict[str, str]:
 
 
 def secret_config_paths() -> list[Path]:
-    return [EXA_CONFIG, GOOGLE_CSE_CONFIG, XMLSTOCK_CONFIG, XMLSTOCK_LEGACY_CONFIG]
+    return [EXA_CONFIG, GOOGLE_CSE_CONFIG, XMLSTOCK_CONFIG, XMLSTOCK_LEGACY_CONFIG, LLM_CONFIG, DEEPSEEK_CONFIG]
 
 
 def env_or_config(name: str, *paths: Path) -> str | None:

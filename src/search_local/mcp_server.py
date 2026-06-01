@@ -49,8 +49,30 @@ def run_research_pipeline(query: str, max_sources: int = 80, include_google: boo
     return _with_artifacts(research_pipeline(query, max_sources=int(max_sources), include_google=bool(include_google), include_exa=bool(include_exa), google_backend=google_backend))
 
 
-def deep_research(query: str, max_sources: int = 140, include_google: bool = True, include_exa: bool = True, google_backend: str = "xmlstock") -> dict[str, Any]:
-    return _with_artifacts(research_subagents(query, max_sources=int(max_sources), include_google=bool(include_google), include_exa=bool(include_exa), google_backend=google_backend))
+def deep_research(
+    query: str,
+    max_sources: int = 140,
+    include_google: bool = True,
+    include_exa: bool = True,
+    google_backend: str = "xmlstock",
+    subagent_provider: str = "deterministic",
+    subagent_count: int = 6,
+    subagent_model: str | None = None,
+    parallelism: int = 8,
+) -> dict[str, Any]:
+    return _with_artifacts(
+        research_subagents(
+            query,
+            max_sources=int(max_sources),
+            include_google=bool(include_google),
+            include_exa=bool(include_exa),
+            google_backend=google_backend,
+            subagent_provider=subagent_provider,
+            subagent_count=int(subagent_count),
+            subagent_model=subagent_model,
+            parallelism=int(parallelism),
+        )
+    )
 
 
 def search_doctor(live: bool = False) -> dict[str, Any]:
@@ -113,7 +135,7 @@ TOOLS = [
     },
     {
         "name": "deep_research",
-        "description": "Multi-lane research with deterministic subagents: scope mapping, primary sources, freshness, skepticism, practitioner evidence, synthesis, and quality audit.",
+        "description": "Multi-lane research with provider-pluggable subagent lane planning, parallel collection, and quality audit.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -122,6 +144,10 @@ TOOLS = [
                 "include_google": {"type": "boolean", "default": True},
                 "include_exa": {"type": "boolean", "default": True},
                 "google_backend": {"type": "string", "enum": ["xmlstock", "cse"], "default": "xmlstock"},
+                "subagent_provider": {"type": "string", "default": "deterministic"},
+                "subagent_count": {"type": "integer", "default": 6},
+                "subagent_model": {"type": "string"},
+                "parallelism": {"type": "integer", "default": 8},
             },
             "required": ["query"],
         },

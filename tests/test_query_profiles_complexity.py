@@ -259,11 +259,59 @@ def test_research_subagents_runs_lanes_and_quality_audit(monkeypatch):
     assert result["summary"]["engine"] == "research-subagents"
     assert result["summary"]["providers"] == ["exa", "google-xmlstock"]
     assert len(result["summary"]["subagents"]) == 6
+    assert result["summary"]["subagent_provider"] == "deterministic"
+    assert result["summary"]["parallelism"] == 8
     assert len(exa_calls) == 12
     assert len(google_calls) == 12
     assert result["summary"]["quality_audit"]["overall_score"] > 0
     assert result["summary"]["quality_audit"]["coverage"]["claims_found"] >= 1
     assert all("subagent" in src["extra"] for src in result["sources"])
+
+
+def test_research_subagents_accepts_provider_generated_ten_lane_plan(monkeypatch):
+    query = "Yandex Direct 2026 optimization research"
+    exa_calls = []
+
+    plan = [
+        {
+            "name": f"agent_{index}",
+            "objective": f"objective {index}",
+            "queries": [f"{query} angle {index}"],
+        }
+        for index in range(10)
+    ]
+
+    def fake_plan(q, *, provider="deterministic", count=6, model=None):
+        assert q == query
+        assert provider == "deepseek"
+        assert count == 10
+        assert model == "deepseek-chat"
+        return plan, {"provider": provider, "planner_ok": True, "model": model, "count": len(plan)}, []
+
+    def fake_exa_search(q, *, num=5, **_kwargs):
+        exa_calls.append((q, num))
+        return [_source(q, 1, url=f"https://example.com/{len(exa_calls)}")], "raw", None
+
+    monkeypatch.setattr(profiles, "build_provider_subagent_plan", fake_plan)
+    monkeypatch.setattr(profiles, "exa_search", fake_exa_search)
+
+    result = profiles.research_subagents(
+        query,
+        max_sources=30,
+        include_google=False,
+        subagent_provider="deepseek",
+        subagent_count=10,
+        subagent_model="deepseek-chat",
+        parallelism=10,
+    )
+
+    assert result["ok"] is True
+    assert len(result["summary"]["subagents"]) == 10
+    assert result["summary"]["subagent_provider"] == "deepseek"
+    assert result["summary"]["subagent_planner"]["planner_ok"] is True
+    assert result["summary"]["parallelism"] == 10
+    assert len(exa_calls) == 10
+    assert {src["extra"]["subagent"] for src in result["sources"]} == {f"agent_{index}" for index in range(10)}
 
 
 def test_research_subagents_treats_single_provider_failure_as_partial(monkeypatch):
@@ -321,7 +369,36 @@ def test_doctor_treats_missing_google_cse_as_optional(monkeypatch, tmp_path):
         (["research", 'сложный запрос "кавычки" -минус', "--num", "4"], "run_research", {"query": 'сложный запрос "кавычки" -минус', "num": 4}),
         (["pipeline", "Codex MCP research", "--max-sources", "30", "--no-google"], "run_research_pipeline", {"query": "Codex MCP research", "max_sources": 30, "include_google": False, "include_exa": True, "google_backend": "xmlstock"}),
         (["pipeline", "Codex MCP research", "--google-backend", "cse"], "run_research_pipeline", {"query": "Codex MCP research", "max_sources": 80, "include_google": True, "include_exa": True, "google_backend": "cse"}),
-        (["deep", "Codex MCP research", "--max-sources", "40", "--no-exa"], "run_research_subagents", {"query": "Codex MCP research", "max_sources": 40, "include_google": True, "include_exa": False, "google_backend": "xmlstock"}),
+        (
+            ["deep", "Codex MCP research", "--max-sources", "40", "--no-exa"],
+            "run_research_subagents",
+            {
+                "query": "Codex MCP research",
+                "max_sources": 40,
+                "include_google": True,
+                "include_exa": False,
+                "google_backend": "xmlstock",
+                "subagent_provider": "deterministic",
+                "subagent_count": 6,
+                "subagent_model": None,
+                "parallelism": 8,
+            },
+        ),
+        (
+            ["deep", "Codex MCP research", "--subagent-provider", "deepseek", "--subagent-count", "10", "--subagent-model", "deepseek-chat", "--parallelism", "10"],
+            "run_research_subagents",
+            {
+                "query": "Codex MCP research",
+                "max_sources": 140,
+                "include_google": True,
+                "include_exa": True,
+                "google_backend": "xmlstock",
+                "subagent_provider": "deepseek",
+                "subagent_count": 10,
+                "subagent_model": "deepseek-chat",
+                "parallelism": 10,
+            },
+        ),
         (["google", "OpenAI Codex OSS", "--num", "7", "--start", "11", "--backend", "cse", "--country", "countryUS", "--language", "lang_en", "--safe", "off"], "run_google", {"query": "OpenAI Codex OSS", "num": 7, "start": 11, "region": None, "backend": "cse", "country": "countryUS", "language": "lang_en", "safe": "off"}),
         (["fetch", "https://example.com/a?x=1", "https://example.com/b#frag"], "run_fetch", {"urls": ["https://example.com/a?x=1", "https://example.com/b#frag"]}),
     ],
@@ -364,7 +441,16 @@ def test_cli_dispatch_contract_for_varied_commands(monkeypatch, tmp_path, capsys
         assert kwargs == {"max_sources": expected["max_sources"], "include_google": expected["include_google"], "include_exa": expected["include_exa"], "google_backend": expected["google_backend"]}
     elif runner_name == "run_research_subagents":
         assert args == (expected["query"],)
-        assert kwargs == {"max_sources": expected["max_sources"], "include_google": expected["include_google"], "include_exa": expected["include_exa"], "google_backend": expected["google_backend"]}
+        assert kwargs == {
+            "max_sources": expected["max_sources"],
+            "include_google": expected["include_google"],
+            "include_exa": expected["include_exa"],
+            "google_backend": expected["google_backend"],
+            "subagent_provider": expected["subagent_provider"],
+            "subagent_count": expected["subagent_count"],
+            "subagent_model": expected["subagent_model"],
+            "parallelism": expected["parallelism"],
+        }
     elif runner_name == "run_google":
         assert args == (expected["query"],)
         assert kwargs == {"num": expected["num"], "start": expected["start"], "region": expected["region"], "backend": expected["backend"], "country": expected["country"], "language": expected["language"], "safe": expected["safe"]}
