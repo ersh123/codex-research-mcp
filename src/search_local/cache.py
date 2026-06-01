@@ -8,7 +8,7 @@ Write path: serialize result on disk for future hits.
 TTLs (seconds) tuned per profile:
   quick / docs / research:   24h   (SERP changes daily, docs links stable for a day)
   google:                    12h   (quota-bound web SERP)
-  research-pipeline:         12h   (multi-provider runs are more expensive)
+  research-pipeline/deep:    12h   (multi-provider runs are more expensive)
   fetch:                     7d    (URL contents drift slowly)
   doctor:                    0     (always fresh — never cache health check)
 
@@ -34,6 +34,7 @@ TTL_SECONDS = {
     "research": 24 * 3600,
     "google": 12 * 3600,
     "research-pipeline": 12 * 3600,
+    "research-subagents": 12 * 3600,
     "fetch": 7 * 24 * 3600,
     "doctor": 0,
 }

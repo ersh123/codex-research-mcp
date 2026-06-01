@@ -6,7 +6,7 @@ import sys
 from typing import Any, Callable
 
 from .artifacts import write_artifacts
-from .profiles import docs, doctor, fetch, google, quick, research, research_pipeline
+from .profiles import docs, doctor, fetch, google, quick, research, research_pipeline, research_subagents
 from .redaction import redact_text
 
 
@@ -47,6 +47,10 @@ def google_search(
 
 def run_research_pipeline(query: str, max_sources: int = 80, include_google: bool = True, include_exa: bool = True, google_backend: str = "xmlstock") -> dict[str, Any]:
     return _with_artifacts(research_pipeline(query, max_sources=int(max_sources), include_google=bool(include_google), include_exa=bool(include_exa), google_backend=google_backend))
+
+
+def deep_research(query: str, max_sources: int = 140, include_google: bool = True, include_exa: bool = True, google_backend: str = "xmlstock") -> dict[str, Any]:
+    return _with_artifacts(research_subagents(query, max_sources=int(max_sources), include_google=bool(include_google), include_exa=bool(include_exa), google_backend=google_backend))
 
 
 def search_doctor(live: bool = False) -> dict[str, Any]:
@@ -94,12 +98,27 @@ TOOLS = [
     },
     {
         "name": "research_pipeline",
-        "description": "Codex-oriented research pipeline: query expansion, multi-provider collection, dedupe, freshness checks, cross-reference, and BS flags.",
+        "description": "Codex-oriented research pipeline: query expansion, multi-provider collection, dedupe, freshness checks, cross-reference, quality audit, and weak-source flags.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "query": {"type": "string"},
                 "max_sources": {"type": "integer", "default": 80},
+                "include_google": {"type": "boolean", "default": True},
+                "include_exa": {"type": "boolean", "default": True},
+                "google_backend": {"type": "string", "enum": ["xmlstock", "cse"], "default": "xmlstock"},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "deep_research",
+        "description": "Multi-lane research with deterministic subagents: scope mapping, primary sources, freshness, skepticism, practitioner evidence, synthesis, and quality audit.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "max_sources": {"type": "integer", "default": 140},
                 "include_google": {"type": "boolean", "default": True},
                 "include_exa": {"type": "boolean", "default": True},
                 "google_backend": {"type": "string", "enum": ["xmlstock", "cse"], "default": "xmlstock"},
@@ -148,6 +167,7 @@ def handle(req: dict[str, Any]) -> dict[str, Any] | None:
             "exa_fetch": exa_fetch,
             "google_search": google_search,
             "research_pipeline": run_research_pipeline,
+            "deep_research": deep_research,
             "search_doctor": search_doctor,
         }
         if name not in handlers:

@@ -231,6 +231,59 @@ def test_research_pipeline_scales_per_query_collection_for_200_plus_sources(monk
     assert min(google_nums) >= 19
 
 
+def test_research_subagents_runs_lanes_and_quality_audit(monkeypatch):
+    query = "deep research agent architecture"
+    exa_calls = []
+    google_calls = []
+
+    def fake_exa_search(q, *, num=5, **_kwargs):
+        exa_calls.append((q, num))
+        return [
+            _source(q, 1, url=f"https://docs.example.com/{len(exa_calls)}", source_type="official_docs"),
+            _source(q, 2, url=f"https://github.com/org/repo/issues/{len(exa_calls)}", source_type="github"),
+        ], "raw", None
+
+    def fake_google_xmlstock_search(q, *, num=10, **_kwargs):
+        google_calls.append((q, num))
+        return [
+            _source(q, 1, url=f"https://example.com/report/{len(google_calls)}"),
+        ], {"source_count": 1, "engine": "google-xmlstock"}, "raw", None
+
+    monkeypatch.setattr(profiles, "exa_search", fake_exa_search)
+    monkeypatch.setattr(profiles, "google_xmlstock_search", fake_google_xmlstock_search)
+
+    result = profiles.research_subagents(query, max_sources=36)
+
+    assert result["ok"] is True
+    assert result["profile"] == "research-subagents"
+    assert result["summary"]["engine"] == "research-subagents"
+    assert result["summary"]["providers"] == ["exa", "google-xmlstock"]
+    assert len(result["summary"]["subagents"]) == 6
+    assert len(exa_calls) == 12
+    assert len(google_calls) == 12
+    assert result["summary"]["quality_audit"]["overall_score"] > 0
+    assert result["summary"]["quality_audit"]["coverage"]["claims_found"] >= 1
+    assert all("subagent" in src["extra"] for src in result["sources"])
+
+
+def test_research_subagents_treats_single_provider_failure_as_partial(monkeypatch):
+    def fake_exa_search(q, *, num=5, **_kwargs):
+        return [_source(q, 1, url="https://docs.example.com/ok", source_type="official_docs")], "raw", None
+
+    def fake_google_xmlstock_search(q, *, num=10, **_kwargs):
+        return [], {"source_count": 0, "engine": "google-xmlstock"}, "", "timeout"
+
+    monkeypatch.setattr(profiles, "exa_search", fake_exa_search)
+    monkeypatch.setattr(profiles, "google_xmlstock_search", fake_google_xmlstock_search)
+
+    result = profiles.research_subagents("partial failure", max_sources=12)
+
+    assert result["ok"] is True
+    assert result["warnings"]
+    assert result["summary"]["partial_failures"] == 12
+    assert result["sources"]
+
+
 def test_doctor_treats_missing_google_cse_as_optional(monkeypatch, tmp_path):
     tool = tmp_path / "tool"
     tool.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
@@ -268,6 +321,7 @@ def test_doctor_treats_missing_google_cse_as_optional(monkeypatch, tmp_path):
         (["research", 'сложный запрос "кавычки" -минус', "--num", "4"], "run_research", {"query": 'сложный запрос "кавычки" -минус', "num": 4}),
         (["pipeline", "Codex MCP research", "--max-sources", "30", "--no-google"], "run_research_pipeline", {"query": "Codex MCP research", "max_sources": 30, "include_google": False, "include_exa": True, "google_backend": "xmlstock"}),
         (["pipeline", "Codex MCP research", "--google-backend", "cse"], "run_research_pipeline", {"query": "Codex MCP research", "max_sources": 80, "include_google": True, "include_exa": True, "google_backend": "cse"}),
+        (["deep", "Codex MCP research", "--max-sources", "40", "--no-exa"], "run_research_subagents", {"query": "Codex MCP research", "max_sources": 40, "include_google": True, "include_exa": False, "google_backend": "xmlstock"}),
         (["google", "OpenAI Codex OSS", "--num", "7", "--start", "11", "--backend", "cse", "--country", "countryUS", "--language", "lang_en", "--safe", "off"], "run_google", {"query": "OpenAI Codex OSS", "num": 7, "start": 11, "region": None, "backend": "cse", "country": "countryUS", "language": "lang_en", "safe": "off"}),
         (["fetch", "https://example.com/a?x=1", "https://example.com/b#frag"], "run_fetch", {"urls": ["https://example.com/a?x=1", "https://example.com/b#frag"]}),
     ],
@@ -306,6 +360,9 @@ def test_cli_dispatch_contract_for_varied_commands(monkeypatch, tmp_path, capsys
         assert args == (expected["urls"],)
         assert kwargs == {}
     elif runner_name == "run_research_pipeline":
+        assert args == (expected["query"],)
+        assert kwargs == {"max_sources": expected["max_sources"], "include_google": expected["include_google"], "include_exa": expected["include_exa"], "google_backend": expected["google_backend"]}
+    elif runner_name == "run_research_subagents":
         assert args == (expected["query"],)
         assert kwargs == {"max_sources": expected["max_sources"], "include_google": expected["include_google"], "include_exa": expected["include_exa"], "google_backend": expected["google_backend"]}
     elif runner_name == "run_google":

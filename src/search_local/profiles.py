@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import OrderedDict
 from typing import Any
 
@@ -19,7 +20,9 @@ from .config import (
     env_or_config_any,
 )
 from .models import Source
+from .quality import build_quality_audit
 from .research import annotate_sources, build_subqueries, summarize_validation
+from .subagents import build_subagent_plan
 from .util import run_cmd
 
 
@@ -36,15 +39,16 @@ def _dedupe_sources(sources: list[Source]) -> list[Source]:
     return out
 
 
-def _result(profile: str, query: str, sources: list[Source], summary: dict[str, Any], warnings: list[str] | None = None) -> dict[str, Any]:
+def _result(profile: str, query: str, sources: list[Source], summary: dict[str, Any], warnings: list[str] | None = None, *, allow_partial: bool = False) -> dict[str, Any]:
+    warning_list = warnings or []
     return {
-        "ok": not warnings,
+        "ok": (not warning_list) or (allow_partial and bool(sources)),
         "profile": profile,
         "query": query,
         "sources": [s.to_dict() for s in sources],
         "summary": summary,
         "artifacts": {},
-        "warnings": warnings or [],
+        "warnings": warning_list,
     }
 
 
@@ -146,11 +150,81 @@ def research_pipeline(query: str, *, max_sources: int = 80, include_google: bool
             "subqueries": subqueries,
             "providers": [name for name, enabled in [("exa", include_exa), (provider_name if include_google else "google-xmlstock", include_google)] if enabled],
             **summarize_validation(all_sources),
+            "quality_audit": build_quality_audit(all_sources),
         }
         return _result("research-pipeline", query, all_sources, summary, warnings)
 
     params = {"max_sources": max_sources, "include_google": include_google, "include_exa": include_exa, "google_backend": google_backend}
     return cached_call("research-pipeline", query, params, _live)
+
+
+def research_subagents(query: str, *, max_sources: int = 140, include_google: bool = True, include_exa: bool = True, google_backend: str = "xmlstock") -> dict[str, Any]:
+    def _live() -> dict[str, Any]:
+        plan = build_subagent_plan(query)
+        provider_count = int(include_exa) + int(include_google)
+        query_count = sum(len(lane["queries"]) for lane in plan)
+        per_query_num = max(2, min(25, math.ceil(max_sources / max(query_count * max(provider_count, 1), 1))))
+        all_sources: list[Source] = []
+        warnings: list[str] = []
+        providers: list[str] = []
+        if include_exa:
+            providers.append("exa")
+        if include_google:
+            providers.append("google-cse" if google_backend == "cse" else "google-xmlstock")
+
+        tasks: list[dict[str, Any]] = []
+        for lane in plan:
+            for subquery in lane["queries"]:
+                if include_exa:
+                    tasks.append({"provider": "exa", "lane": lane, "subquery": subquery})
+                if include_google:
+                    tasks.append({"provider": "google", "lane": lane, "subquery": subquery})
+
+        def run_task(index: int, task: dict[str, Any]) -> tuple[int, str | None, list[Source]]:
+            lane = task["lane"]
+            subquery = task["subquery"]
+            provider = task["provider"]
+            if provider == "exa":
+                sources, _raw, err = exa_search(subquery, num=per_query_num)
+            elif google_backend == "cse":
+                sources, _summary, _raw, err = google_cse_search(subquery, num=per_query_num)
+            else:
+                sources, _summary, _raw, err = google_xmlstock_search(subquery, num=per_query_num)
+            for src in sources:
+                src.extra["subagent"] = lane["name"]
+                src.extra["lane_objective"] = lane["objective"]
+                src.extra["subquery"] = subquery
+            warning = f"{provider} {lane['name']} {subquery}: {err}" if err else None
+            return index, warning, sources
+
+        task_results: list[tuple[int, str | None, list[Source]]] = []
+        if tasks:
+            with ThreadPoolExecutor(max_workers=min(8, len(tasks))) as pool:
+                futures = [pool.submit(run_task, index, task) for index, task in enumerate(tasks)]
+                for future in as_completed(futures):
+                    task_results.append(future.result())
+
+        for _index, warning, sources in sorted(task_results, key=lambda item: item[0]):
+            if warning:
+                warnings.append(warning)
+            all_sources.extend(sources)
+
+        all_sources = annotate_sources(_dedupe_sources(all_sources))[:max_sources]
+        validation = summarize_validation(all_sources)
+        audit = build_quality_audit(all_sources)
+        summary = {
+            "engine": "research-subagents",
+            "subagents": plan,
+            "providers": providers,
+            "per_query_num": per_query_num,
+            "partial_failures": len(warnings),
+            **validation,
+            "quality_audit": audit,
+        }
+        return _result("research-subagents", query, all_sources, summary, warnings, allow_partial=True)
+
+    params = {"max_sources": max_sources, "include_google": include_google, "include_exa": include_exa, "google_backend": google_backend}
+    return cached_call("research-subagents", query, params, _live)
 
 
 def fetch(urls: list[str]) -> dict[str, Any]:

@@ -15,6 +15,7 @@ from .profiles import google as run_google
 from .profiles import quick as run_quick
 from .profiles import research as run_research
 from .profiles import research_pipeline as run_research_pipeline
+from .profiles import research_subagents as run_research_subagents
 from .redaction import redact_text
 
 
@@ -40,6 +41,14 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("pipeline", help="Codex-oriented research pipeline with validation signals")
     p.add_argument("query")
     p.add_argument("--max-sources", type=int, default=80)
+    p.add_argument("--no-google", action="store_true")
+    p.add_argument("--no-exa", action="store_true")
+    p.add_argument("--google-backend", choices=["xmlstock", "cse"], default="xmlstock")
+    _add_common(p)
+
+    p = sub.add_parser("deep", help="multi-lane research with deterministic subagents and quality audit")
+    p.add_argument("query")
+    p.add_argument("--max-sources", type=int, default=140)
     p.add_argument("--no-google", action="store_true")
     p.add_argument("--no-exa", action="store_true")
     p.add_argument("--google-backend", choices=["xmlstock", "cse"], default="xmlstock")
@@ -83,6 +92,8 @@ def dispatch(args: argparse.Namespace) -> dict[str, Any]:
         return run_research(args.query, num=args.num)
     if args.command == "pipeline":
         return run_research_pipeline(args.query, max_sources=args.max_sources, include_google=not args.no_google, include_exa=not args.no_exa, google_backend=args.google_backend)
+    if args.command == "deep":
+        return run_research_subagents(args.query, max_sources=args.max_sources, include_google=not args.no_google, include_exa=not args.no_exa, google_backend=args.google_backend)
     if args.command == "docs":
         return run_docs(args.query, num=args.num)
     if args.command == "google":

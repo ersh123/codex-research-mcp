@@ -6,7 +6,7 @@
 
 ## Short Description
 
-Codex Research MCP is a local-first MCP server and CLI that turns a maintainer research question into a source-backed research artifact: multi-provider search, dedupe, freshness scoring, cross-reference summaries, and weak-source/BS flags.
+Codex Research MCP is a local-first MCP server and CLI that turns a maintainer research question into a source-backed research artifact: multi-provider search, deterministic research lanes, dedupe, freshness scoring, claim candidates, citation coverage, cross-reference summaries, and weak-source flags.
 
 ## Repository URL
 
@@ -24,17 +24,18 @@ Maintainers waste a lot of time checking whether a dependency change, API behavi
 
 - official docs and GitHub sources are classified separately from forums and generic web pages;
 - duplicate results are removed;
-- freshness and source quality are exposed as fields;
+- freshness, source quality, evidence type, trust tier, and claim coverage are exposed as fields;
 - suspicious wording, deprecated/security terms, missing URLs, and thin snippets are flagged;
+- deep research runs split work into deterministic lanes: scope mapping, primary evidence, freshness, skepticism, practitioner evidence, and synthesis;
 - every run writes `report.md`, `sources.jsonl`, and `summary.json` so a maintainer can audit the evidence.
 
 ## How Codex Will Use It
 
-Codex can call `research_pipeline` before changing code when correctness depends on current external facts: SDK migrations, issue triage, CI failure research, security release checks, and dependency behavior changes.
+Codex can call `research_pipeline` or `deep_research` before changing code when correctness depends on current external facts: SDK migrations, issue triage, CI failure research, security release checks, and dependency behavior changes.
 
 ## API Credit Use
 
-API credits would be used to dogfood the MCP server against real OSS maintenance tasks, improve source validation heuristics, test deeper 200+ source research runs, and publish reproducible examples for Codex users.
+API credits would be used to dogfood the MCP server against real OSS maintenance tasks, improve source validation and citation coverage heuristics, test deeper 200+ source research runs, and publish reproducible examples for Codex users.
 
 ## Current Status
 

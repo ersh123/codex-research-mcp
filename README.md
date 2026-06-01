@@ -11,6 +11,8 @@ It is built for work where "search the web" is not enough: triaging OSS issues, 
 - Dedupes sources across providers.
 - Classifies sources as official docs, GitHub, forum, Reddit, or web.
 - Scores freshness and source quality.
+- Extracts claim candidates and checks citation coverage.
+- Runs deterministic research lanes for deep work: scope, primary evidence, freshness, skepticism, practitioner evidence, and synthesis.
 - Flags thin snippets, hype language, deprecated/security wording, and missing URLs.
 - Writes reproducible `report.md`, `sources.jsonl`, and `summary.json` artifacts.
 - Exposes the workflow as a stdio MCP server for Codex and other MCP clients.
@@ -42,7 +44,7 @@ Environment variables are also supported:
 - `GOOGLE_CSE_CX`
 - `SEARCH_LOCAL_CACHE_ROOT`
 
-Google support defaults to XMLstock Google XML so it can reuse the same XMLstock account/key class as the old XML search path. The default config file is `~/.config/xmlstock/.env`; existing `~/.config/yandex-xmlstock/.env` files are also read through the legacy aliases above. Google CSE JSON remains available with `--backend cse`.
+Google support defaults to XMLstock Google XML so it can reuse the same XMLstock account/key class as other XMLstock search paths. The default config file is `~/.config/xmlstock/.env`. Google CSE JSON remains available with `--backend cse`.
 
 ## CLI
 
@@ -52,6 +54,7 @@ codex-research docs "OpenAI Responses API file search"
 codex-research google "MCP server examples" --num 5
 codex-research google "MCP server examples" --backend cse --num 5
 codex-research pipeline "Should this OSS project migrate to the latest OpenAI Responses API?" --max-sources 120
+codex-research deep "Compare deep research agent architectures for OSS maintainers" --max-sources 180
 codex-research fetch "https://developers.openai.com/"
 codex-research doctor
 ```
@@ -74,6 +77,7 @@ Tools:
 - `exa_fetch`
 - `google_search`
 - `research_pipeline`
+- `deep_research`
 - `search_doctor`
 
 Example MCP client config:
@@ -96,10 +100,22 @@ Example MCP client config:
 2. Query Exa and XMLstock Google XML.
 3. Deduplicate by URL.
 4. Annotate each source with `quality_score`, `freshness`, and flags.
-5. Summarize cross-reference signals by domain and source type.
-6. Write artifacts for review.
+5. Build a quality audit: trust tiers, evidence types, claim candidates, citation coverage, contradiction candidates, and recommendations.
+6. Summarize cross-reference signals by domain and source type.
+7. Write artifacts for review.
 
 It is intentionally conservative: it does not claim truth from one result page. It gives Codex a structured evidence set and tells it where the weak spots are.
+
+`deep_research` adds deterministic subagents on top of the same provider stack. They are not external LLM calls; they are reproducible research lanes:
+
+- `scope_mapper`
+- `primary_source_hunter`
+- `freshness_guard`
+- `skeptic`
+- `practitioner`
+- `synthesis_editor`
+
+This keeps the useful part of multi-agent research — decomposed search intent and independent evidence lanes — without making the output depend on hidden agent chatter.
 
 ## Artifacts And Cache
 
@@ -120,7 +136,7 @@ Dedup cache lives next to the run cache. Result summaries include `summary.cache
 | profile | TTL |
 |---|---:|
 | `quick`, `docs`, `research` | 24h |
-| `google`, `research-pipeline` | 12h |
+| `google`, `research-pipeline`, `research-subagents` | 12h |
 | `fetch` | 7d |
 | `doctor` | never cached |
 

@@ -9,7 +9,7 @@ def test_mcp_lists_codex_research_tools():
     tools = response["result"]["tools"]
     names = {tool["name"] for tool in tools}
 
-    assert {"exa_quick", "google_search", "research_pipeline", "search_doctor"} <= names
+    assert {"exa_quick", "google_search", "research_pipeline", "deep_research", "search_doctor"} <= names
     assert "yandex_search" not in names
 
 
@@ -51,3 +51,43 @@ def test_mcp_research_pipeline_call_returns_text_json(monkeypatch):
     assert payload["summary"]["max_sources"] == 12
     assert payload["summary"]["include_google"] is False
     assert payload["artifacts"] == {"report_md": "/tmp/report.md"}
+
+
+def test_mcp_deep_research_call_returns_text_json(monkeypatch):
+    def fake_deep(query, *, max_sources=140, include_google=True, include_exa=True, google_backend="xmlstock"):
+        return {
+            "ok": True,
+            "profile": "research-subagents",
+            "query": query,
+            "sources": [],
+            "summary": {
+                "engine": "research-subagents",
+                "max_sources": max_sources,
+                "include_google": include_google,
+                "include_exa": include_exa,
+                "google_backend": google_backend,
+            },
+            "artifacts": {},
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(mcp_server, "research_subagents", fake_deep)
+    monkeypatch.setattr(mcp_server, "write_artifacts", lambda result: {"report_md": "/tmp/deep.md"})
+
+    response = mcp_server.handle({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+            "name": "deep_research",
+            "arguments": {"query": "Codex OSS", "max_sources": 24, "include_exa": False},
+        },
+    })
+
+    text = response["result"]["content"][0]["text"]
+    payload = json.loads(text)
+
+    assert payload["profile"] == "research-subagents"
+    assert payload["summary"]["max_sources"] == 24
+    assert payload["summary"]["include_exa"] is False
+    assert payload["artifacts"] == {"report_md": "/tmp/deep.md"}

@@ -42,7 +42,35 @@ def render_report(result: dict[str, Any]) -> str:
         "",
     ]
     for key, value in summary.items():
+        if key == "quality_audit":
+            continue
+        if key == "subagents" and isinstance(value, list):
+            names = ", ".join(str(item.get("name", "")) for item in value if isinstance(item, dict))
+            lines.append(f"- **subagents**: `{names}`")
+            continue
         lines.append(f"- **{key}**: `{value}`")
+    audit = summary.get("quality_audit") or {}
+    if audit:
+        lines.extend(["", "## Quality Audit", ""])
+        lines.append(f"- **verdict**: `{audit.get('verdict')}`")
+        lines.append(f"- **overall_score**: `{audit.get('overall_score')}`")
+        coverage = audit.get("coverage") or {}
+        if coverage:
+            lines.append(f"- **coverage**: `{coverage}`")
+        recommendations = audit.get("recommendations") or []
+        if recommendations:
+            lines.extend(["", "### Recommendations", ""])
+            lines.extend(f"- {item}" for item in recommendations)
+        claims = audit.get("claims") or []
+        if claims:
+            lines.extend(["", "### Top Claims", ""])
+            for claim in claims[:12]:
+                lines.append(f"- `{claim.get('confidence')}` {claim.get('claim')}")
+        contradictions = audit.get("contradictions") or []
+        if contradictions:
+            lines.extend(["", "### Contradiction Candidates", ""])
+            for item in contradictions[:8]:
+                lines.append(f"- {item.get('fingerprint')}: {item.get('risk')}")
     if warnings:
         lines.extend(["", "## Warnings", ""])
         lines.extend(f"- {w}" for w in warnings)
