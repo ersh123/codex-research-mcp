@@ -1,3 +1,6 @@
+from urllib.parse import parse_qs, urlparse
+
+from search_local.adapters import google_xmlstock
 from search_local.adapters.exa import classify_source, parse_exa_markdown
 from search_local.adapters.google_cse import parse_google_cse
 from search_local.adapters.google_xmlstock import clean_xml_text, parse_google_xmlstock
@@ -100,3 +103,44 @@ def test_google_xmlstock_parser_handles_docs_entities_and_domains():
 
 def test_clean_xml_text_strips_nested_markup_and_unescapes():
     assert clean_xml_text("Цена &lt;b&gt;<hlword>быстро</hlword>&lt;/b&gt; &amp; честно") == "Цена быстро & честно"
+
+
+def test_google_xmlstock_search_reads_legacy_xmlstock_config(monkeypatch, tmp_path):
+    primary_config = tmp_path / "xmlstock.env"
+    legacy_config = tmp_path / "yandex-xmlstock.env"
+    legacy_config.write_text(
+        "XMLSTOCK_YANDEX_XML_USER=legacy-user\nXMLSTOCK_YANDEX_XML_KEY=legacy-key\n",
+        encoding="utf-8",
+    )
+
+    for name in ("XMLSTOCK_USER", "XMLSTOCK_KEY", "XMLSTOCK_YANDEX_XML_USER", "XMLSTOCK_YANDEX_XML_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(google_xmlstock, "XMLSTOCK_CONFIG", primary_config)
+    monkeypatch.setattr(google_xmlstock, "XMLSTOCK_LEGACY_CONFIG", legacy_config)
+
+    captured: dict[str, str] = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b"<doc><title>Result</title><url>https://example.com/a</url><passage>Snippet</passage></doc>"
+
+    def fake_urlopen(req, timeout):
+        captured["url"] = req.full_url
+        return FakeResponse()
+
+    monkeypatch.setattr(google_xmlstock.urllib.request, "urlopen", fake_urlopen)
+
+    sources, summary, _raw, err = google_xmlstock.google_xmlstock_search("test query", num=3)
+
+    params = parse_qs(urlparse(captured["url"]).query)
+    assert err is None
+    assert summary["engine"] == "google-xmlstock"
+    assert len(sources) == 1
+    assert params["user"] == ["legacy-user"]
+    assert params["key"] == ["legacy-key"]

@@ -9,7 +9,12 @@ from collections import Counter
 from typing import Any
 
 from search_local.adapters.exa import classify_source
-from search_local.config import XMLSTOCK_CONFIG, XMLSTOCK_GOOGLE_XML_ENDPOINT, env_or_config
+from search_local.config import (
+    XMLSTOCK_CONFIG,
+    XMLSTOCK_GOOGLE_XML_ENDPOINT,
+    XMLSTOCK_LEGACY_CONFIG,
+    env_or_config_any,
+)
 from search_local.models import Source
 from search_local.util import domain_from_url
 
@@ -94,10 +99,10 @@ def google_xmlstock_search(
     tbs: str | None = None,
     related: bool = False,
 ) -> tuple[list[Source], dict[str, Any], str, str | None]:
-    user = env_or_config("XMLSTOCK_USER", XMLSTOCK_CONFIG)
-    key = env_or_config("XMLSTOCK_KEY", XMLSTOCK_CONFIG)
+    user = env_or_config_any(("XMLSTOCK_USER", "XMLSTOCK_YANDEX_XML_USER"), XMLSTOCK_CONFIG, XMLSTOCK_LEGACY_CONFIG)
+    key = env_or_config_any(("XMLSTOCK_KEY", "XMLSTOCK_YANDEX_XML_KEY"), XMLSTOCK_CONFIG, XMLSTOCK_LEGACY_CONFIG)
     if not user or not key:
-        return [], {"source_count": 0, "engine": "google-xmlstock"}, "", "XMLSTOCK_USER and XMLSTOCK_KEY are required"
+        return [], {"source_count": 0, "engine": "google-xmlstock"}, "", "XMLSTOCK_USER/XMLSTOCK_KEY or XMLSTOCK_YANDEX_XML_USER/XMLSTOCK_YANDEX_XML_KEY are required"
 
     params: dict[str, str | int] = {"user": user, "key": key, "query": query}
     if region is not None:

@@ -8,7 +8,16 @@ from .adapters.exa import exa_fetch, exa_search
 from .adapters.google_cse import google_cse_search
 from .adapters.google_xmlstock import google_xmlstock_search
 from .cache import cached_call
-from .config import EXA_CONFIG, EXA_FETCH, EXA_SEARCH, GOOGLE_CSE_CONFIG, XMLSTOCK_CONFIG, env_or_config
+from .config import (
+    EXA_CONFIG,
+    EXA_FETCH,
+    EXA_SEARCH,
+    GOOGLE_CSE_CONFIG,
+    XMLSTOCK_CONFIG,
+    XMLSTOCK_LEGACY_CONFIG,
+    env_or_config,
+    env_or_config_any,
+)
 from .models import Source
 from .research import annotate_sources, build_subqueries, summarize_validation
 from .util import run_cmd
@@ -162,15 +171,21 @@ def doctor(*, live: bool = False) -> dict[str, Any]:
         if not ok:
             warnings.append(f"{name}: {detail}")
 
+    def add_optional(name: str, ok: bool, detail: str = "") -> None:
+        checks.append({"name": name, "ok": ok, "optional": True, "detail": detail})
+
     for name, path in [("exa-search", EXA_SEARCH), ("exa-fetch", EXA_FETCH)]:
         add(name, path.exists() and path.is_file(), str(path))
     add("exa-config", EXA_CONFIG.exists(), f"{EXA_CONFIG} exists; content not printed" if EXA_CONFIG.exists() else f"{EXA_CONFIG} missing")
     add(
         "google-xmlstock-config",
-        bool(env_or_config("XMLSTOCK_USER", XMLSTOCK_CONFIG) and env_or_config("XMLSTOCK_KEY", XMLSTOCK_CONFIG)),
-        f"{XMLSTOCK_CONFIG} or env XMLSTOCK_USER/XMLSTOCK_KEY",
+        bool(
+            env_or_config_any(("XMLSTOCK_USER", "XMLSTOCK_YANDEX_XML_USER"), XMLSTOCK_CONFIG, XMLSTOCK_LEGACY_CONFIG)
+            and env_or_config_any(("XMLSTOCK_KEY", "XMLSTOCK_YANDEX_XML_KEY"), XMLSTOCK_CONFIG, XMLSTOCK_LEGACY_CONFIG)
+        ),
+        f"{XMLSTOCK_CONFIG} or {XMLSTOCK_LEGACY_CONFIG} or env XMLSTOCK_USER/XMLSTOCK_KEY",
     )
-    add(
+    add_optional(
         "google-cse-config",
         bool(env_or_config("GOOGLE_CSE_API_KEY", GOOGLE_CSE_CONFIG) and env_or_config("GOOGLE_CSE_CX", GOOGLE_CSE_CONFIG)),
         f"optional fallback: {GOOGLE_CSE_CONFIG} or env GOOGLE_CSE_API_KEY/GOOGLE_CSE_CX",

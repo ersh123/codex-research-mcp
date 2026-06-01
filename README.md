@@ -36,11 +36,13 @@ Environment variables are also supported:
 - `EXA_API_KEY`
 - `XMLSTOCK_USER`
 - `XMLSTOCK_KEY`
+- `XMLSTOCK_YANDEX_XML_USER`
+- `XMLSTOCK_YANDEX_XML_KEY`
 - `GOOGLE_CSE_API_KEY`
 - `GOOGLE_CSE_CX`
 - `SEARCH_LOCAL_CACHE_ROOT`
 
-Google support defaults to XMLstock Google XML so it can reuse the same XMLstock account/key class as the old XML search path. Google CSE JSON remains available with `--backend cse`.
+Google support defaults to XMLstock Google XML so it can reuse the same XMLstock account/key class as the old XML search path. The default config file is `~/.config/xmlstock/.env`; existing `~/.config/yandex-xmlstock/.env` files are also read through the legacy aliases above. Google CSE JSON remains available with `--backend cse`.
 
 ## CLI
 

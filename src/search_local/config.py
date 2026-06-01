@@ -25,6 +25,7 @@ EXA_FETCH = _which_or_path("exa-fetch", "EXA_FETCH_BIN", "~/.local/bin/exa-fetch
 EXA_CONFIG = _path_from_env("EXA_CONFIG", "~/.config/exa/.env")
 GOOGLE_CSE_CONFIG = _path_from_env("GOOGLE_CSE_CONFIG", "~/.config/google-cse/.env")
 XMLSTOCK_CONFIG = _path_from_env("XMLSTOCK_CONFIG", "~/.config/xmlstock/.env")
+XMLSTOCK_LEGACY_CONFIG = _path_from_env("XMLSTOCK_LEGACY_CONFIG", "~/.config/yandex-xmlstock/.env")
 
 CACHE_ROOT = _path_from_env(
     "SEARCH_LOCAL_CACHE_ROOT",
@@ -49,7 +50,7 @@ def config_values(path: Path) -> dict[str, str]:
 
 
 def secret_config_paths() -> list[Path]:
-    return [EXA_CONFIG, GOOGLE_CSE_CONFIG, XMLSTOCK_CONFIG]
+    return [EXA_CONFIG, GOOGLE_CSE_CONFIG, XMLSTOCK_CONFIG, XMLSTOCK_LEGACY_CONFIG]
 
 
 def env_or_config(name: str, *paths: Path) -> str | None:
@@ -59,5 +60,12 @@ def env_or_config(name: str, *paths: Path) -> str | None:
     for path in paths:
         value = config_values(path).get(name)
         if value:
+            return value
+    return None
+
+
+def env_or_config_any(names: tuple[str, ...], *paths: Path) -> str | None:
+    for name in names:
+        if value := env_or_config(name, *paths):
             return value
     return None

@@ -231,6 +231,35 @@ def test_research_pipeline_scales_per_query_collection_for_200_plus_sources(monk
     assert min(google_nums) >= 19
 
 
+def test_doctor_treats_missing_google_cse_as_optional(monkeypatch, tmp_path):
+    tool = tmp_path / "tool"
+    tool.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    tool.chmod(0o755)
+    exa_config = tmp_path / "exa.env"
+    xmlstock_config = tmp_path / "xmlstock.env"
+    missing_cse_config = tmp_path / "missing-google-cse.env"
+    missing_legacy_config = tmp_path / "missing-legacy.env"
+    exa_config.write_text("EXA_API_KEY=test\n", encoding="utf-8")
+    xmlstock_config.write_text("XMLSTOCK_USER=user\nXMLSTOCK_KEY=key\n", encoding="utf-8")
+
+    for name in ("GOOGLE_CSE_API_KEY", "GOOGLE_CSE_CX"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(profiles, "EXA_SEARCH", tool)
+    monkeypatch.setattr(profiles, "EXA_FETCH", tool)
+    monkeypatch.setattr(profiles, "EXA_CONFIG", exa_config)
+    monkeypatch.setattr(profiles, "XMLSTOCK_CONFIG", xmlstock_config)
+    monkeypatch.setattr(profiles, "XMLSTOCK_LEGACY_CONFIG", missing_legacy_config)
+    monkeypatch.setattr(profiles, "GOOGLE_CSE_CONFIG", missing_cse_config)
+
+    result = profiles.doctor(live=False)
+    cse_check = next(check for check in result["summary"]["checks"] if check["name"] == "google-cse-config")
+
+    assert result["ok"] is True
+    assert result["warnings"] == []
+    assert cse_check["ok"] is False
+    assert cse_check["optional"] is True
+
+
 @pytest.mark.parametrize(
     ("argv", "runner_name", "expected"),
     [
